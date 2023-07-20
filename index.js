@@ -25,8 +25,39 @@ const run = async () => {
     const wishListCollection = db.collection("wishList");
     const readingListCollection = db.collection("readingList");
     const saltRounds = 10;
-    const secretKey = "gdhfgjktfgjtgweryrtutrfhfdh";
     
+    
+
+    const verifyToken = (req, res, next) => {
+      const token = req.header('Authorization')?.replace('Bearer ', '');
+    
+      if (!token) {
+        return res.status(401).json({ message: 'Unauthorized' });
+      }
+    
+      try {
+        const decoded = jwt.verify(token, secretKey);
+        req.user = decoded; // The user data extracted from the token payload
+        next();
+      } catch (error) {
+        return res.status(401).json({ message: 'Invalid token' });
+      }
+    };
+
+    app.get('/me', verifyToken, async (req, res) => {
+      try {
+        const user = await userCollection.findOne({ _id: req.user.id });
+ // Assuming you have a User model and user data is stored in your database
+        if (!user) {
+          return res.status(404).json({ message: 'User not found' });
+        }
+        res.json(user);
+      } catch (error) {
+        console.error(error);
+        res.status(500).json({ message: 'Server Error' });
+      }
+    });
+
 
     app.post("/register", async (req, res) => {
       const { name, email, password } = req.body;
@@ -77,7 +108,7 @@ const run = async () => {
         res.status(400).json({ error: 'Search term is required' });
       } else {
         try {
-          const filteredBooks = await Book.find({
+          const filteredBooks = await bookCollection.find({
             $or: [
               { title: { $regex: searchTerm, $options: 'i' } }, // Case-insensitive title search
               { author: { $regex: searchTerm, $options: 'i' } }, // Case-insensitive author search
