@@ -21,113 +21,40 @@ const run = async () => {
   try {
     const db = client.db("BookDB");
     const bookCollection = db.collection("books");
-    const userCollection = db.collection("users");
     const wishListCollection = db.collection("wishList");
     const readingListCollection = db.collection("readingList");
-    const saltRounds = 10;
-    
-    
 
-    const verifyToken = (req, res, next) => {
-      const token = req.header('Authorization')?.replace('Bearer ', '');
-    
-      if (!token) {
-        return res.status(401).json({ message: 'Unauthorized' });
-      }
-    
-      try {
-        const decoded = jwt.verify(token, secretKey);
-        req.user = decoded; // The user data extracted from the token payload
-        next();
-      } catch (error) {
-        return res.status(401).json({ message: 'Invalid token' });
-      }
-    };
-
-    app.get('/me', verifyToken, async (req, res) => {
-      try {
-        const user = await userCollection.findOne({ _id: req.user.id });
- // Assuming you have a User model and user data is stored in your database
-        if (!user) {
-          return res.status(404).json({ message: 'User not found' });
-        }
-        res.json(user);
-      } catch (error) {
-        console.error(error);
-        res.status(500).json({ message: 'Server Error' });
-      }
-    });
-
-
-    app.post("/register", async (req, res) => {
-      const { name, email, password } = req.body;
-
-      // Check if email already exists
-      const existingUser = await userCollection.findOne({ email });
-      if (existingUser) {
-        return res.status(400).json({ message: "Email already exists" });
-      }
-
-      // Hash the password
-      const hashedPassword = await bcrypt.hash(password, saltRounds);
-
-      // Save the user in the database
-      const newUser = { name, email, password: hashedPassword };
-      const result = await userCollection.insertOne(newUser);
-
-      res.json({ message: "User registered successfully", result });
-    });
-
-    // User login
-    app.post("/login", async (req, res) => {
-      const { email, password } = req.body;
-
-      // Find the user in the database
-      const user = await userCollection.findOne({ email });
-
-      if (!user || !(await bcrypt.compare(password, user.password))) {
-        return res.status(401).json({ message: "Invalid email or password" });
-      }
-
-      // Create a JWT token
-      const token = jwt.sign({ email }, secretKey, { expiresIn: "1h" });
-
-      res.json({ message: "User login successfully", user, token: token });
-    });
-
+   
     app.get("/books", async (req, res) => {
-      const cursor = bookCollection.find({});
-      const book = await cursor.toArray();
+      const searchTerm = req.query.searchTerm;
+      const sort = req.query.sort;
+      const limit = parseInt(sort)
 
-      res.send({ status: true, data: book });
+      const query = {
+        $or: [
+          { title: { $regex: searchTerm, $options: "i" } },
+          { author: { $regex: searchTerm, $options: "i" } },
+          { genre: { $regex: searchTerm, $options: "i" } },
+        ],
+      };
+      let book;
+      if(searchTerm){
+         const cursor =  bookCollection.find(query);
+         book = await cursor.toArray()
+      }
+      else if(limit){
+       
+        const cursor =  bookCollection.find().sort({ createdAt: -1 }).limit(limit)
+        book = await cursor.toArray()
+      }
+      else{
+         const cursor = bookCollection.find({})
+         book = await cursor.toArray()
+      }
+      
+      res.send({ status: true, total: book.length, data: book });
     });
    
-    app.get('/search', async (req, res) => {
-      const searchTerm = req.query.q;
-      if (!searchTerm) {
-        res.status(400).json({ error: 'Search term is required' });
-      } else {
-        try {
-          const filteredBooks = await bookCollection.find({
-            $or: [
-              { title: { $regex: searchTerm, $options: 'i' } }, // Case-insensitive title search
-              { author: { $regex: searchTerm, $options: 'i' } }, // Case-insensitive author search
-              { genre: { $regex: searchTerm, $options: 'i' } }, // Case-insensitive genre search
-            ],
-          });
-          res.json(filteredBooks);
-        } catch (error) {
-          res.status(500).json({ error: 'Error searching books' });
-        }
-      }
-    })
-
-    app.get("/books/latest", async (req, res) => {
-      const cursor = bookCollection.find().sort({ createdAt: -1 }).limit(10);
-      const books = await cursor.toArray();
-
-      res.send({ status: true, data: books });
-    });
 
     app.get("/book/details/:id", async (req, res) => {
       const id = req.params.id;
@@ -313,19 +240,6 @@ const run = async () => {
       });
     });
 
-    app.get("/books/search", async (req, res) => {
-      const searchTerm = req.query.searchTerm;
-      const query = {
-        $or: [
-          { title: { $regex: searchTerm, $options: "i" } },
-          { author: { $regex: searchTerm, $options: "i" } },
-          { genre: { $regex: searchTerm, $options: "i" } },
-        ],
-      };
-      const book = await bookCollection.find(query).toArray();
-
-      res.send({ status: true, data: book });
-    });
 
     app.delete("/book/:id", async (req, res) => {
       const id = req.params.id;
