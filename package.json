@@ -1,9 +1,9 @@
 {
-  "name": "",
+  "name": "Mikat Syed",
   "version": "1.0.0",
   "main": "index.js",
-  "license": "MIT",
-  "author": "Mir Hussain",
+  "license": "",
+  "author": "<mikatsyed@gmail.com>",
   "scripts": {
     "start": "node index.js",
     "dev": "nodemon index.js"
